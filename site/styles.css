@@ -423,3 +423,20 @@ header h1 {
         background: none;
     }
 }
+
+.rodape {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: var(--max-width);
+
+    /* o body já é flex-column: isto empurra o rodapé para o fim da tela */
+    margin-top: auto;
+    padding-top: 1.5rem;
+
+    text-align: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
