@@ -1,0 +1,58 @@
+# Arquivos de credenciais e variáveis de ambiente (CRÍTICO)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+
+# Java / Maven / Gradle
+target/
+.gradle/
+build/
+
+# Arquivos gerados por frameworks (React, Next.js, Vue, Angular)
+dist/
+build/
+.next/
+.out/
+.nuxt/
+
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Ehthumbs.db
+Desktop.ini
+
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# IntelliJ / WebStorm / PyCharm
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+
+
+*.log
+logs/
+*.tmp
+*.bak
