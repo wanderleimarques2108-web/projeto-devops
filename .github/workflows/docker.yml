@@ -64,3 +64,16 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Deploy na VPS
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            docker pull ghcr.io/wanderleimarques2108-web/projeto-devops:latest &&
+            (docker rm -f site || true) &&
+            docker run -d --name site --restart unless-stopped -p 80:80 ghcr.io/wanderleimarques2108-web/projeto-devops:latest &&
+            docker image prune -f
+          '
