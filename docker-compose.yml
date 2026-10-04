@@ -1,0 +1,8 @@
+services:
+  site:
+    build: .
+    image: ghcr.io/wanderleimarques2108-web/projeto-devops:latest
+    container_name: site
+    restart: unless-stopped
+    ports:
+      - "80:80"
