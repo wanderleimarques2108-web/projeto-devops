@@ -6,3 +6,15 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+
+  kuma:
+    image: louislam/uptime-kuma:1
+    container_name: kuma
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - kuma_data:/app/data
+
+volumes:
+  kuma_data:
