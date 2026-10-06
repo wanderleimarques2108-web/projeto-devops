@@ -52,7 +52,7 @@ Cadeia Docker: **Código → Dockerfile → Imagem → Container → Aplicação
 | Item | Valor |
 |---|---|
 | Provedor | Hostinger (VPS KVM 1, Campinas/BR) |
-| Sistema operacional | Ubuntu 24.04.4 LTS |
+| Sistema operacional | Ubuntu 24.04.5 LTS |
 | Recursos | 1 vCPU, 3,8 GB de RAM, 48 GB de disco |
 | IP público | Omitido por segurança: enviado ao professor por e-mail |
 | Domínio | www.pvhdevops.tech |
@@ -173,15 +173,42 @@ Fluxo de trabalho: branch `feature/...` → Pull Request → merge na `main` →
 
 ## 10. Monitoramento
 
-Ferramenta: **Uptime Kuma**, acessado por túnel SSH (`ssh -L 3001:127.0.0.1:3001 <usuario>@<IP-DA-VPS>` e depois http://localhost:3001).
+## 10. Monitoramento
 
-| Monitor | Tipo | Alvo | Responde a |
-|---|---|---|---|
-| Site | HTTP(s) | `https://www.pvhdevops.tech` | A aplicação está online? (inclui o certificado) |
-| Servidor | Ping ou TCP 22 | IP da VPS (informado ao professor) | O servidor está funcionando? |
-| Container do site | HTTP(s) | `http://site:80` | O container está funcionando? |
+Ferramenta: **Uptime Kuma**, executada como container no mesmo `docker-compose.yml` da aplicação. O painel **não é público**: o container escuta só em `127.0.0.1:3001` e o acesso é feito por túnel SSH, com usuário e senha próprios.
 
-Como identificar uma indisponibilidade: o painel mostra o monitor em vermelho (*Down*), com horário e motivo, e mantém o histórico. É possível ligar notificações (e-mail ou Telegram) em *Settings → Notifications*.
+```bash
+ssh -L 3001:127.0.0.1:3001 <usuario>@<IP-DA-VPS>
+# depois, no navegador: http://localhost:3001
+```
+
+### Monitores configurados
+
+| Monitor | Tipo | Alvo | Intervalo | Responde a |
+|---|---|---|---|---|
+| site - Aplicação | HTTP(s) | `https://www.pvhdevops.tech` | 60 s | A aplicação está online? (passa pelo Cloudflare e acompanha a validade do certificado HTTPS) |
+| Container - site (Nginx) | HTTP(s) | `http://site:80` | 60 s | O container está funcionando? (acesso pela rede interna do Docker, sem passar pelo Cloudflare) |
+| Servidor - VPS (SSH) | TCP Port | IP da VPS (informado ao professor), porta 22 | 60 s | O servidor está funcionando? |
+
+### Como identificar uma indisponibilidade
+
+O painel mostra o monitor em vermelho (**Desligado**), com horário, mensagem de erro e histórico de disponibilidade. A combinação dos monitores indica onde está a falha:
+
+- Só **site - Aplicação** em vermelho: problema no Cloudflare, no DNS ou no certificado.
+- **site - Aplicação** e **Container - site (Nginx)** em vermelho, com **Servidor - VPS (SSH)** verde: o container do Nginx parou, mas a VPS está de pé.
+- Os três em vermelho: a VPS está fora do ar ou inacessível.
+
+### Teste de indisponibilidade realizado
+
+O container do site foi parado com `docker stop site`. O Kuma registrou:
+
+- **Container - site (Nginx):** Desligado, mensagem `getaddrinfo EAI_AGAIN site` (o container deixou de existir na rede do Docker).
+- **site - Aplicação:** Desligado, mensagem `Request failed with status code 522` (erro do Cloudflare quando a origem não responde).
+- **Servidor - VPS (SSH):** continuou Ligado (100%), pois só o container caiu.
+
+Após `docker start site`, o monitor **site - Aplicação** voltou para Ligado (`200 - OK`) em cerca de 1 minuto.
+
+Evidências: `monitor-site.png`, `monitor-container.png`, `monitor-servidor.png`, `monitor-queda-site.png`, `monitor-queda-container.png` e `monitor-recuperacao-site.png`, em `docs/evidencias/`.
 
 ## 11. Segurança
 
@@ -223,9 +250,19 @@ Os prints estão em `docs/evidencias/`:
 | Evidência | Arquivo |
 |---|---|
 | Painel do provedor (IP e nome do servidor ocultados) | `cloud-painel.png` |
+| Acesso SSH, sistema operacional e recursos da VPS (IPs ocultados) | `cloud-ssh.png` |
+| Containers em execução (`docker compose ps`) | `docker-ps.png` |
+| Firewall UFW ativo (portas 22 e 80) | `seguranca-ufw.png` |
 | Pipeline CI/CD (execução verde) | `pipeline-verde.png` |
 | Site com HTTPS (cadeado) | `https-navegador.png` |
 | Redirecionamento HTTP → HTTPS | `https-redirect.png` |
 | Always Use HTTPS ativo no Cloudflare | `dns-https-always-https.png` |
+| Monitor da aplicação (online) | `monitor-site.png` |
+| Monitor do container (online) | `monitor-container.png` |
+| Monitor do servidor (IP ocultado) | `monitor-servidor.png` |
+| Teste de queda: aplicação fora do ar (erro 522) | `monitor-queda-site.png` |
+| Teste de queda: container fora do ar | `monitor-queda-container.png` |
+| Recuperação: aplicação voltou a responder | `monitor-recuperacao-site.png` |
+
 
 > Os prints complementam o ambiente, que está no ar e pode ser validado pelo professor.
