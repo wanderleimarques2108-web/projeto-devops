@@ -173,8 +173,6 @@ Fluxo de trabalho: branch `feature/...` → Pull Request → merge na `main` →
 
 ## 10. Monitoramento
 
-## 10. Monitoramento
-
 Ferramenta: **Uptime Kuma**, executada como container no mesmo `docker-compose.yml` da aplicação. O painel **não é público**: o container escuta só em `127.0.0.1:3001` e o acesso é feito por túnel SSH, com usuário e senha próprios.
 
 ```bash
@@ -217,6 +215,86 @@ Evidências: `monitor-site.png`, `monitor-container.png`, `monitor-servidor.png`
 - HTTPS entre usuário e Cloudflare, com certificado válido e renovação automática, e redirecionamento de HTTP para HTTPS.
 - O IP da VPS e as credenciais de acesso não ficam no repositório: foram enviados ao professor por e-mail.
 - Firewall (UFW) da VPS liberando somente as portas 22 e 80.
+
+### Acesso SSH seguro à VPS
+
+O acesso ao servidor é feito por **chave SSH**, não por senha. Como configurar:
+
+**1. Criar a chave (cada integrante, no próprio computador)**
+
+```bash
+ssh-keygen -t ed25519 -C "nome-do-computador"
+```
+
+Cada pessoa usa a **própria chave**. A chave privada nunca é compartilhada nem vai para o Git; só a chave pública (`.pub`) é enviada. Como alternativa a um arquivo no disco, a chave pode ficar guardada em um gerenciador de senhas com agente SSH (por exemplo, o Bitwarden Desktop).
+
+**2. Cadastrar a chave pública na conta do servidor**
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "<chave-publica>" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Cada usuário tem o seu `~/.ssh/authorized_keys`, então cadastrar uma chave não afeta os outros usuários. Teste o login por chave em outra janela antes de seguir.
+
+**3. Restringir o `sshd`** (`/etc/ssh/sshd_config`)
+
+```
+PubkeyAuthentication yes
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+```
+
+- `PasswordAuthentication no`: ninguém entra por senha, só por chave.
+- `PermitRootLogin prohibit-password`: o root só entra por chave; a senha dele fica só para o console web da Hostinger (acesso de emergência).
+- Confira também `/etc/ssh/sshd_config.d/`, cujos arquivos têm prioridade.
+
+```bash
+sshd -t && systemctl restart ssh
+```
+
+Valide a configuração com `sshd -t` e mantenha uma sessão aberta ao reiniciar, para não perder o acesso.
+
+**4. Bloquear tentativas repetidas (fail2ban)**
+
+```bash
+apt install fail2ban -y
+```
+
+Em `/etc/fail2ban/jail.local`:
+
+```
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
+```
+
+```bash
+systemctl enable --now fail2ban
+fail2ban-client status sshd
+```
+
+O fail2ban lê o log do SSH e bloqueia no firewall os IPs que erram o login várias vezes seguidas.
+
+**5. Verificar acessos**
+
+```bash
+last -a | head                                   # logins recentes
+grep "Accepted" /var/log/auth.log | tail         # logins aceitos
+grep "Failed password" /var/log/auth.log | tail  # tentativas falhas
+ssh-keygen -lf ~/.ssh/authorized_keys            # chaves autorizadas
+```
+
+Qualquer chave, usuário ou IP desconhecido deve ser removido ou bloqueado.
+
+**6. Trocar uma chave sem perder o acesso**
+
+Gerar a nova, **adicionar** a pública ao `authorized_keys`, testar o login em outra janela e só então remover a antiga. Se uma chave for perdida ou vazar, remova a linha dela do `authorized_keys`.
+
+**Contas e senhas:** use senhas longas e aleatórias, únicas por serviço e guardadas em um gerenciador de senhas. Ative a **verificação em duas etapas (2FA)** com app autenticador na conta do provedor e no gerenciador de senhas.
 
 ## 12. Processo de deploy
 
