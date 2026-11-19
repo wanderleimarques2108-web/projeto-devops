@@ -1,0 +1,14 @@
+---
+# Mesmo procedimento do roteiro da aula (Oracle Linux na OCI)
+
+- name: Adicionar o repositório do Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+
+- name: Instalar o Docker CE e o plugin do Compose
+  ansible.builtin.dnf:
+    name: "{{ docker_packages }}"
+    state: present
+    allowerasing: true   # resolve conflito com podman/runc da distro

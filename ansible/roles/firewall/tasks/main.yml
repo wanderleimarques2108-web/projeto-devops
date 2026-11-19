@@ -1,0 +1,16 @@
+---
+# Role firewall: libera só o necessário (SSH + HTTP) no firewall do servidor.
+# Lembrete: na nuvem existe um SEGUNDO firewall (Security List na OCI,
+# firewall do painel na Hostinger) que também precisa liberar a porta 80.
+
+- name: Montar a lista de portas a liberar (SSH sempre primeiro)
+  ansible.builtin.set_fact:
+    firewall_ports: "{{ ([ansible_port | default(22) | int] + firewall_allowed_tcp_ports | map('int') | list) | unique }}"
+
+- name: Configurar o UFW (Ubuntu/Debian)
+  ansible.builtin.include_tasks: ufw.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Configurar o firewalld (Oracle Linux/RHEL)
+  ansible.builtin.include_tasks: firewalld.yml
+  when: ansible_os_family == 'RedHat'

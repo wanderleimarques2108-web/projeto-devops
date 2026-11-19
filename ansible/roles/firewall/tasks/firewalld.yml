@@ -1,0 +1,35 @@
+---
+- name: Instalar o firewalld
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  when: not (firewalld_disable | bool)
+
+- name: Iniciar o firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+  when: not (firewalld_disable | bool)
+  notify: Reiniciar o Docker   # recria as regras de rede do Docker
+
+- name: Liberar as portas TCP necessárias (SSH e HTTP)
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ firewall_ports }}"
+  when: not (firewalld_disable | bool)
+
+- name: Desligar o firewalld (opção firewalld_disable=true, como no exemplo da aula)
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: false
+    state: stopped
+  when: firewalld_disable | bool
+  failed_when: false
+  notify: Reiniciar o Docker
+
+- name: Aplicar agora a reinicialização do Docker, se necessária
+  ansible.builtin.meta: flush_handlers
