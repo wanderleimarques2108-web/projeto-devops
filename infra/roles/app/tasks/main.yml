@@ -1,0 +1,38 @@
+---
+- name: Criar diretório da aplicação
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Copiar docker-compose.yml
+  ansible.builtin.copy:
+    src: "{{ app_compose_src }}"
+    dest: "{{ app_dir }}/docker-compose.yml"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0644"
+
+# A VPS só baixa a imagem do GHCR; o build acontece na pipeline.
+- name: Baixar imagens e subir containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    pull: always
+    build: never
+    remove_orphans: true
+    state: present
+
+- name: Remover imagens antigas
+  community.docker.docker_prune:
+    images: true
+
+- name: Verificar se o site responde
+  ansible.builtin.uri:
+    url: http://127.0.0.1/
+    status_code: 200
+  register: site_check
+  retries: 5
+  delay: 3
+  until: site_check.status == 200

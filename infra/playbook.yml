@@ -1,0 +1,13 @@
+---
+# Provisiona a VPS e publica a aplicação.
+#   ansible-playbook playbook.yml                 # tudo
+#   ansible-playbook playbook.yml --tags app      # só o deploy
+- name: Provisionar VPS do projeto-devops
+  hosts: vps
+  become: true
+
+  roles:
+    - { role: common, tags: [common] }
+    - { role: docker, tags: [docker], when: docker_install | bool }
+    - { role: firewall, tags: [firewall] }
+    - { role: app, tags: [app] }

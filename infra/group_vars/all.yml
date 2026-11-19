@@ -1,0 +1,15 @@
+---
+# Usuário que executa os containers (entra no grupo docker)
+deploy_user: "{{ ansible_user }}"
+
+# Diretório da aplicação na VPS (o mesmo usado pela pipeline)
+app_dir: "/home/{{ deploy_user }}/projeto-devops"
+
+# Instala o Docker pelo repositório oficial. Use false se o Docker já
+# estiver instalado na VPS e você não quiser que o Ansible mexa nele.
+docker_install: true
+
+# Portas liberadas no UFW
+firewall_allowed_ports:
+  - { port: 22, proto: tcp, comment: SSH }
+  - { port: 80, proto: tcp, comment: HTTP (Cloudflare) }
