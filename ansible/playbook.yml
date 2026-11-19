@@ -1,0 +1,29 @@
+---
+# ==========================================================
+# N2 - Automação do ambiente com Ansible
+# Servidor Linux novo -> Docker -> Stacks -> Aplicação por HTTP
+#
+# Uso (dentro da pasta ansible/):
+#   ansible-playbook playbook.yml
+#
+# Funciona em Ubuntu/Debian (VPS Hostinger da N1) e em
+# Oracle Linux/RHEL 8+ (VM da OCI). A distro é detectada sozinha.
+# ==========================================================
+
+# ---------- PLAY 1: preparar a conexão ----------
+# Sem gather_facts: em um servidor novo o Python pode ainda
+# não estar pronto (ex.: Oracle Linux 8 só tem Python 3.6).
+- name: "1/2 - Preparar a conexão com o servidor"
+  hosts: web
+  gather_facts: false
+  roles:
+    - bootstrap
+
+# ---------- PLAY 2: configurar e implantar ----------
+- name: "2/2 - Instalar Docker, configurar firewall e subir as stacks"
+  hosts: web
+  become: true
+  roles:
+    - docker     # instala e inicia o Docker + Compose
+    - firewall   # UFW (Ubuntu) ou firewalld (Oracle Linux): libera SSH e 80
+    - deploy     # copia o projeto e roda o docker compose up

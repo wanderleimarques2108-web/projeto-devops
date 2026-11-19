@@ -1,0 +1,68 @@
+---
+# ==========================================================
+# VARIÁVEIS DO PROJETO
+# Valem para todos os hosts do inventário. Qualquer uma pode
+# ser sobrescrita na linha de comando:  -e "nome=valor"
+# ==========================================================
+
+# ---------- Aplicação ----------
+app_name: projeto-devops
+
+# Pasta da aplicação no servidor. Vazio = ~/projeto-devops do
+# usuário SSH (mesma pasta usada pelo deploy do GitHub Actions).
+app_dir: ""
+
+# Arquivos do repositório copiados para o servidor.
+# O docker-compose.yml é o MESMO da N1. O Dockerfile e o site/
+# vão juntos para que o servidor consiga fazer o build local
+# se a imagem do GHCR não puder ser baixada.
+app_files:
+  - docker-compose.yml
+  - Dockerfile
+  - site/
+
+# Política de pull das imagens no "docker compose up":
+#   missing -> baixa só se a imagem não existir (padrão, idempotente)
+#   always  -> sempre busca a versão mais nova no GHCR
+#              (ansible-playbook playbook.yml -e app_pull_policy=always)
+app_pull_policy: missing
+
+# Porta HTTP da aplicação (container "site" do docker-compose.yml)
+app_http_port: 80
+
+# Testar também o acesso HTTP a partir do control node (sua máquina).
+# Se falhar, o problema costuma ser o firewall da nuvem.
+app_check_external: true
+
+# ---------- Docker ----------
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Pacotes antigos/não oficiais que conflitam com o Docker CE (Ubuntu/Debian)
+docker_conflicting_packages_debian:
+  - docker.io
+  - docker-doc
+  - docker-compose
+  - docker-compose-v2
+  - podman-docker
+  - containerd
+  - runc
+
+# Adiciona o usuário SSH ao grupo docker (usar "docker" sem sudo,
+# como faz o deploy do GitHub Actions)
+docker_add_user_to_group: true
+
+# ---------- Firewall do servidor ----------
+# A porta SSH (ansible_port) é liberada automaticamente antes de
+# ativar o firewall, para o Ansible não se trancar para fora.
+# O Uptime Kuma (3001) NÃO entra aqui: ele só escuta em 127.0.0.1.
+firewall_allowed_tcp_ports:
+  - 80
+
+# Oracle Linux/RHEL: true = desliga o firewalld (abordagem do exemplo
+# do professor) e deixa a proteção para a Security List da nuvem.
+firewalld_disable: false

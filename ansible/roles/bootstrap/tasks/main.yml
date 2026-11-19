@@ -1,0 +1,69 @@
+---
+# Role bootstrap: garante que o servidor aceita o Ansible.
+# Usa só "raw" (SSH puro), que funciona mesmo sem Python no destino.
+
+- name: Aguardar a porta SSH do servidor abrir
+  ansible.builtin.wait_for:
+    host: "{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}"
+    port: "{{ hostvars[inventory_hostname]['ansible_port'] | default(22) }}"
+    search_regex: OpenSSH
+    timeout: 300
+  delegate_to: localhost
+  become: false
+  vars:
+    # roda na SUA máquina: usa o Python do próprio Ansible
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+- name: Detectar um Python 3.8+ no servidor
+  ansible.builtin.raw: "{{ bootstrap_detect_python }}"
+  register: bootstrap_python
+  changed_when: false
+  check_mode: false
+  # Logo após o boot o login pode ser recusado por alguns segundos
+  retries: 10
+  delay: 15
+  until: bootstrap_python.rc == 0
+  when: ansible_python_interpreter is not defined
+
+- name: Instalar Python moderno (ex. Oracle Linux 8, que só traz o 3.6)
+  ansible.builtin.raw: |
+    if command -v dnf >/dev/null 2>&1; then dnf install -y python3.11
+    elif command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq python3
+    else echo "Gerenciador de pacotes não suportado" >&2; exit 1
+    fi
+  become: true
+  when:
+    - ansible_python_interpreter is not defined
+    - (bootstrap_python.stdout_lines | select | list | last | default('NENHUM') | trim) == 'NENHUM'
+
+- name: Detectar o Python novamente após a instalação
+  ansible.builtin.raw: "{{ bootstrap_detect_python }}"
+  register: bootstrap_python_after
+  changed_when: false
+  check_mode: false
+  when:
+    - ansible_python_interpreter is not defined
+    - (bootstrap_python.stdout_lines | select | list | last | default('NENHUM') | trim) == 'NENHUM'
+
+- name: Definir o Python que o Ansible vai usar no servidor
+  ansible.builtin.set_fact:
+    # última linha não vazia da detecção (ignora mensagens de login)
+    ansible_python_interpreter: >-
+      {{ (bootstrap_python_after.stdout_lines | default(bootstrap_python.stdout_lines, true))
+         | map('trim') | select | list | last | default('NENHUM') }}
+  when: ansible_python_interpreter is not defined
+
+- name: Conferir se foi encontrado um Python compatível
+  ansible.builtin.assert:
+    that: ansible_python_interpreter != 'NENHUM'
+    fail_msg: "Não foi possível obter Python 3.8+ no servidor. Instale manualmente e rode de novo."
+    quiet: true
+
+- name: Testar a conexão completa (SSH + Python), o mesmo que "ansible -m ping"
+  ansible.builtin.ping:
+
+- name: Aguardar o cloud-init terminar (servidor recém-criado ainda configurando)
+  ansible.builtin.command: cloud-init status --wait
+  changed_when: false
+  failed_when: false
+  check_mode: false

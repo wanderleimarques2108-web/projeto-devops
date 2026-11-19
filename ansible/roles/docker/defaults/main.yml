@@ -1,0 +1,5 @@
+---
+# Arquitetura do Ansible -> arquitetura do pacote .deb
+docker_apt_arch:
+  x86_64: amd64
+  aarch64: arm64

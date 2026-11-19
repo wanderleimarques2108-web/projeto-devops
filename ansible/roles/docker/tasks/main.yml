@@ -1,0 +1,47 @@
+---
+# Role docker: instala o Docker CE oficial + plugin do Compose.
+# Escolhe as tarefas pela família da distro (fato coletado pelo Ansible).
+
+- name: Mostrar a distribuição detectada
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }}: {{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_os_family }}, {{ ansible_architecture }})"
+
+- name: Instalar o Docker no Ubuntu/Debian
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Instalar o Docker no Oracle Linux/RHEL
+  ansible.builtin.include_tasks: redhat.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Falhar se a distro não for suportada
+  ansible.builtin.fail:
+    msg: "Distribuição {{ ansible_distribution }} não suportada (use Ubuntu/Debian ou Oracle Linux/RHEL)."
+  when: ansible_os_family not in ['Debian', 'RedHat']
+
+- name: Habilitar e iniciar o serviço do Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Adicionar o usuário SSH ao grupo docker
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+  when:
+    - docker_add_user_to_group | bool
+    - ansible_user is defined
+    - ansible_user != 'root'
+
+- name: Conferir as versões do Docker e do Compose
+  ansible.builtin.command: docker compose version
+  register: docker_compose_version
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Mostrar a versão do Docker Compose
+  ansible.builtin.debug:
+    msg: "{{ docker_compose_version.stdout | default('Docker Compose ainda não instalado (modo --check)') }}"

@@ -1,0 +1,46 @@
+---
+# Procedimento oficial: https://docs.docker.com/engine/install/ubuntu/
+
+- name: Remover pacotes que conflitam com o Docker CE
+  ansible.builtin.apt:
+    name: "{{ docker_conflicting_packages_debian }}"
+    state: absent
+
+- name: Instalar dependências do repositório
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+
+- name: Criar a pasta das chaves do APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Baixar a chave GPG oficial do Docker
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Adicionar o repositório oficial do Docker
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ docker_apt_arch[ansible_architecture] | default('amd64') }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/{{ ansible_distribution | lower }}
+      {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+- name: Instalar o Docker CE e o plugin do Compose
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+    lock_timeout: 300

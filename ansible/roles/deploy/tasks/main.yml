@@ -1,0 +1,90 @@
+---
+# Role deploy: leva o projeto da N1 para o servidor e sobe as stacks
+# do docker-compose.yml (site + Uptime Kuma).
+
+- name: Descobrir a pasta home do usuário SSH
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ansible_user | default('root') }}"
+
+- name: Definir a pasta da aplicação no servidor
+  ansible.builtin.set_fact:
+    deploy_dir: >-
+      {{ app_dir if (app_dir | length > 0)
+         else getent_passwd[ansible_user | default('root')][4] ~ '/' ~ app_name }}
+
+- name: Criar a pasta da aplicação
+  ansible.builtin.file:
+    path: "{{ deploy_dir }}"
+    state: directory
+    owner: "{{ ansible_user | default('root') }}"
+    mode: "0755"
+
+- name: Copiar os arquivos do projeto (compose, Dockerfile e site)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item }}"
+    dest: "{{ deploy_dir }}/{{ item }}"
+    owner: "{{ ansible_user | default('root') }}"
+    mode: preserve
+  loop: "{{ app_files }}"
+
+- name: Subir as stacks com Docker Compose (docker compose up -d)
+  community.docker.docker_compose_v2:
+    project_src: "{{ deploy_dir }}"
+    project_name: "{{ app_name }}"
+    state: present
+    # Baixa a imagem do GHCR; se não conseguir, o Compose faz o build
+    # local com o Dockerfile copiado acima (o compose tem "build: .").
+    pull: "{{ app_pull_policy }}"
+    remove_orphans: true
+    wait: true
+    wait_timeout: 300   # o Uptime Kuma demora a ficar "healthy" na 1ª vez
+  register: deploy_compose
+
+- name: Testar a aplicação dentro do servidor (HTTP 200 em localhost)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_http_port }}/"
+    status_code: 200
+    return_content: false
+  register: deploy_http_local
+  retries: 10
+  delay: 3
+  until: deploy_http_local.status == 200
+  when: not ansible_check_mode
+
+- name: Testar a aplicação a partir da sua máquina (IP público)
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}:{{ app_http_port }}/"
+    status_code: 200
+    timeout: 10
+  register: deploy_http_external
+  delegate_to: localhost
+  become: false
+  vars:
+    # roda na SUA máquina: usa o Python do próprio Ansible
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  failed_when: false
+  when:
+    - app_check_external | bool
+    - not ansible_check_mode
+
+- name: Listar os containers da stack (evidência - docker compose ps)
+  ansible.builtin.command:
+    cmd: docker compose -p {{ app_name }} ps --format "table {{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}\t{{ '{{' }}.Ports{{ '}}' }}"
+    chdir: "{{ deploy_dir }}"
+  register: deploy_ps
+  changed_when: false
+  check_mode: false
+  failed_when: false
+
+- name: Resultado da implantação
+  ansible.builtin.debug:
+    msg:
+      - "Pasta no servidor: {{ deploy_dir }}"
+      - "{{ deploy_ps.stdout_lines | default([]) }}"
+      - "Teste local (127.0.0.1): {{ deploy_http_local.status | default('não executado') }}"
+      - >-
+        Teste externo: {{ deploy_http_external.status | default('não executado') }}
+        {{ '' if (deploy_http_external.status | default(200)) == 200
+           else '-> confira o firewall da NUVEM (Security List/painel do provedor) para a porta ' ~ app_http_port }}
+      - "Acesse no navegador: http://{{ ansible_host | default(inventory_hostname) }}{{ '' if app_http_port | int == 80 else ':' ~ app_http_port }}"
