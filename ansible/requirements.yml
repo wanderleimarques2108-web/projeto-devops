@@ -1,0 +1,10 @@
+---
+# Coleções usadas pelo playbook. Instalar no control node com:
+#   ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.docker   # docker_compose_v2 (sobe as stacks)
+    version: ">=3.6.0"
+  - name: community.general  # ufw (firewall do Ubuntu)
+    version: ">=7.0.0"
+  - name: ansible.posix      # firewalld (firewall do Oracle Linux / RHEL)
+    version: ">=1.5.0"

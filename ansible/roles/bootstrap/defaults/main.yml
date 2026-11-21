@@ -1,0 +1,8 @@
+---
+# Script (shell puro) que imprime o caminho de um Python 3.8+ ou "NENHUM".
+# Prefere o python3.11 (instalado à parte no Oracle Linux 8).
+bootstrap_detect_python: |
+  if [ -x /usr/bin/python3.11 ]; then echo /usr/bin/python3.11
+  elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'; then command -v python3
+  else echo NENHUM
+  fi

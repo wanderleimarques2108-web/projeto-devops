@@ -1,0 +1,11 @@
+# Dados do servidor real: nunca vão para o Git
+inventory.ini
+*.local.ini
+# Chaves SSH e senhas
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+.vault_pass*
+# Arquivos temporários do Ansible
+*.retry

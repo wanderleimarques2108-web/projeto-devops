@@ -1,0 +1,22 @@
+---
+- name: Instalar o UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    lock_timeout: 300
+
+- name: Liberar as portas TCP necessárias (SSH e HTTP)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ firewall_ports }}"
+
+- name: Bloquear por padrão o tráfego de entrada
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Ativar o UFW
+  community.general.ufw:
+    state: enabled
