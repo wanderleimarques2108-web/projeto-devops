@@ -76,7 +76,6 @@ Cadeia Docker: **Código → Dockerfile → Imagem → Container → Aplicação
 - Uptime Kuma (monitoramento)
 - GitHub e GitHub Actions (CI/CD)
 - GitHub Container Registry (GHCR)
-- Ansible (provisionamento da VPS)
 
 ## 4. Estrutura do projeto
 
@@ -84,7 +83,6 @@ Cadeia Docker: **Código → Dockerfile → Imagem → Container → Aplicação
 projeto-devops/
 ├── .github/workflows/docker.yml   # pipeline CI/CD
 ├── docs/evidencias/               # prints das evidências
-├── infra/                         # Ansible: provisionamento da VPS e deploy
 ├── site/                          # aplicação (HTML, CSS, favicon)
 │   ├── index.html
 │   ├── styles.css
@@ -175,8 +173,6 @@ Fluxo de trabalho: branch `feature/...` → Pull Request → merge na `main` →
 
 ## 10. Monitoramento
 
-## 10. Monitoramento
-
 Ferramenta: **Uptime Kuma**, executada como container no mesmo `docker-compose.yml` da aplicação. O painel **não é público**: o container escuta só em `127.0.0.1:3001` e o acesso é feito por túnel SSH, com usuário e senha próprios.
 
 ```bash
@@ -220,6 +216,86 @@ Evidências: `monitor-site.png`, `monitor-container.png`, `monitor-servidor.png`
 - O IP da VPS e as credenciais de acesso não ficam no repositório: foram enviados ao professor por e-mail.
 - Firewall (UFW) da VPS liberando somente as portas 22 e 80.
 
+### Acesso SSH seguro à VPS
+
+O acesso ao servidor é feito por **chave SSH**, não por senha. Como configurar:
+
+**1. Criar a chave (cada integrante, no próprio computador)**
+
+```bash
+ssh-keygen -t ed25519 -C "nome-do-computador"
+```
+
+Cada pessoa usa a **própria chave**. A chave privada nunca é compartilhada nem vai para o Git; só a chave pública (`.pub`) é enviada. Como alternativa a um arquivo no disco, a chave pode ficar guardada em um gerenciador de senhas com agente SSH (por exemplo, o Bitwarden Desktop).
+
+**2. Cadastrar a chave pública na conta do servidor**
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "<chave-publica>" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+Cada usuário tem o seu `~/.ssh/authorized_keys`, então cadastrar uma chave não afeta os outros usuários. Teste o login por chave em outra janela antes de seguir.
+
+**3. Restringir o `sshd`** (`/etc/ssh/sshd_config`)
+
+```
+PubkeyAuthentication yes
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+```
+
+- `PasswordAuthentication no`: ninguém entra por senha, só por chave.
+- `PermitRootLogin prohibit-password`: o root só entra por chave; a senha dele fica só para o console web da Hostinger (acesso de emergência).
+- Confira também `/etc/ssh/sshd_config.d/`, cujos arquivos têm prioridade.
+
+```bash
+sshd -t && systemctl restart ssh
+```
+
+Valide a configuração com `sshd -t` e mantenha uma sessão aberta ao reiniciar, para não perder o acesso.
+
+**4. Bloquear tentativas repetidas (fail2ban)**
+
+```bash
+apt install fail2ban -y
+```
+
+Em `/etc/fail2ban/jail.local`:
+
+```
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
+```
+
+```bash
+systemctl enable --now fail2ban
+fail2ban-client status sshd
+```
+
+O fail2ban lê o log do SSH e bloqueia no firewall os IPs que erram o login várias vezes seguidas.
+
+**5. Verificar acessos**
+
+```bash
+last -a | head                                   # logins recentes
+grep "Accepted" /var/log/auth.log | tail         # logins aceitos
+grep "Failed password" /var/log/auth.log | tail  # tentativas falhas
+ssh-keygen -lf ~/.ssh/authorized_keys            # chaves autorizadas
+```
+
+Qualquer chave, usuário ou IP desconhecido deve ser removido ou bloqueado.
+
+**6. Trocar uma chave sem perder o acesso**
+
+Gerar a nova, **adicionar** a pública ao `authorized_keys`, testar o login em outra janela e só então remover a antiga. Se uma chave for perdida ou vazar, remova a linha dela do `authorized_keys`.
+
+**Contas e senhas:** use senhas longas e aleatórias, únicas por serviço e guardadas em um gerenciador de senhas. Ative a **verificação em duas etapas (2FA)** com app autenticador na conta do provedor e no gerenciador de senhas.
+
 ## 12. Processo de deploy
 
 **Automático (padrão):** merge na `main` → a pipeline faz o resto.
@@ -233,17 +309,6 @@ docker compose up -d
 docker image prune -f
 ```
 
-**Com Ansible (da sua máquina):**
-
-```bash
-cd infra
-ansible-playbook playbook.yml --tags app
-```
-
-### Provisionamento com Ansible
-
-A pasta `infra/` tem um playbook Ansible que prepara a VPS do zero: instala pacotes básicos, instala o Docker e o Compose pelo repositório oficial, configura o UFW (só 22 e 80) e sobe a aplicação com o `docker-compose.yml`. O inventário com IP e usuário fica fora do Git (`inventory.ini`). Instruções em [`infra/README.md`](infra/README.md).
-
 ## 13. Procedimentos básicos de recuperação
 
 | Problema | O que fazer |
@@ -253,7 +318,7 @@ A pasta `infra/` tem um playbook Ansible que prepara a VPS do zero: instala paco
 | Deploy ruim | Reverter o commit na `main` (`git revert`) e a pipeline publica a versão anterior; ou usar uma tag antiga da imagem (`:v<N>`) |
 | VPS reiniciou | O Docker inicia no boot e os containers voltam sozinhos |
 | Erro 52x do Cloudflare | A VPS não respondeu: conferir `docker compose ps`, o firewall (porta 80) e se a VPS está ligada |
-| VPS perdida | Criar nova VPS, atualizar o IP em `infra/inventory.ini` e rodar `ansible-playbook playbook.yml` (Docker, firewall e aplicação); depois atualizar o IP no Cloudflare e nos secrets da pipeline |
+| VPS perdida | Criar nova VPS, instalar Docker, configurar o firewall, atualizar o IP no Cloudflare e rodar a pipeline (*Actions → Run workflow*) |
 | Dados do monitor | Volume `kuma_data`; backup: `docker run --rm -v projeto-devops_kuma_data:/d -v $PWD:/b alpine tar czf /b/kuma.tgz -C /d .` |
 
 ## 14. Evidências
