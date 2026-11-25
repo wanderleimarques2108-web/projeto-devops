@@ -11,3 +11,7 @@
     - { role: docker, tags: [docker], when: docker_install | bool }
     - { role: firewall, tags: [firewall] }
     - { role: app, tags: [app] }
+    # Só com o token do monitor Push do Kuma (host_vars/projeto-devops.yml)
+    - role: firewall_monitor
+      tags: [monitor]
+      when: kuma_push_token | default('') | length > 0

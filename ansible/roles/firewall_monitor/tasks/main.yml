@@ -1,0 +1,75 @@
+---
+# Só roda quando kuma_push_token está definido (ver playbook.yml).
+- name: Instalar o script que conta os bloqueios
+  ansible.builtin.copy:
+    src: firewall-push.sh
+    dest: /usr/local/bin/firewall-push.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Instalar o comando de resumo (sudo bloqueios 24h | 7d | 1h)
+  ansible.builtin.copy:
+    src: bloqueios
+    dest: /usr/local/bin/bloqueios
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Gravar a configuração (URL do Kuma e limite)
+  ansible.builtin.template:
+    src: firewall-push.env.j2
+    dest: /etc/firewall-push.env
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Instalar o serviço e o timer do systemd
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - firewall-push.service
+    - firewall-push.timer
+
+- name: Instalar o gerador de dados do painel
+  ansible.builtin.copy:
+    src: painel-bloqueios
+    dest: /usr/local/bin/painel-bloqueios
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copiar a página do painel (design Vesper, fontes e ícone)
+  ansible.builtin.copy:
+    src: painel/
+    dest: /var/lib/firewall-push/painel/
+    owner: root
+    group: root
+    mode: u=rwX,go=rX
+    directory_mode: "0755"
+
+- name: Instalar o serviço web do painel (só 127.0.0.1:3002)
+  ansible.builtin.copy:
+    src: painel-bloqueios-web.service
+    dest: /etc/systemd/system/painel-bloqueios-web.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Ligar o serviço web do painel
+  ansible.builtin.systemd_service:
+    name: painel-bloqueios-web.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Ligar o timer (roda a cada minuto e no boot)
+  ansible.builtin.systemd_service:
+    name: firewall-push.timer
+    enabled: true
+    state: started
+    daemon_reload: true

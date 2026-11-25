@@ -1,0 +1,9 @@
+[Unit]
+Description=Envia ao Uptime Kuma os bloqueios do firewall
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# o "-" deixa o envio ao Kuma rodar mesmo se o painel falhar
+ExecStart=-/usr/local/bin/painel-bloqueios
+ExecStart=/usr/local/bin/firewall-push.sh

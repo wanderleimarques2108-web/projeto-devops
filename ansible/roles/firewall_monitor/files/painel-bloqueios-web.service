@@ -1,0 +1,15 @@
+[Unit]
+Description=Painel de bloqueios do firewall (somente 127.0.0.1:3002, abrir pelo túnel SSH)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 3002 --bind 127.0.0.1 --directory /var/lib/firewall-push/painel
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
