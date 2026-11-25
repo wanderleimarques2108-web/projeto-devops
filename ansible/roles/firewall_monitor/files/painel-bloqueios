@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""Gera /var/lib/firewall-push/painel/dados.json para o painel de bloqueios.
+
+Lê o log do kernel (linhas "UFW BLOCK") dos últimos 7 dias e o status do fail2ban.
+Roda a cada minuto pelo firewall-push.timer (antes do envio ao Kuma).
+"""
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import tempfile
+import time
+from collections import Counter
+
+SAIDA = "/var/lib/firewall-push/painel/dados.json"
+
+SERVICOS = {
+    "21": "FTP", "22": "SSH", "23": "Telnet", "25": "SMTP", "53": "DNS", "80": "HTTP",
+    "110": "POP3", "123": "NTP", "135": "Windows RPC", "137": "NetBIOS", "139": "NetBIOS",
+    "143": "IMAP", "161": "SNMP", "389": "LDAP", "443": "HTTPS", "445": "SMB (Windows)",
+    "465": "SMTPS", "587": "SMTP", "993": "IMAPS", "995": "POP3S", "1080": "Proxy SOCKS",
+    "1433": "SQL Server", "1521": "Oracle", "1723": "VPN PPTP", "1883": "MQTT", "1900": "UPnP",
+    "2375": "Docker API", "2376": "Docker API", "3000": "Painel web", "3306": "MySQL",
+    "3389": "Área de trabalho remota", "5060": "VoIP SIP", "5432": "PostgreSQL",
+    "5555": "Android ADB", "5900": "VNC", "5901": "VNC", "6379": "Redis", "7547": "Roteador TR-069",
+    "8000": "Web alternativo", "8080": "Web alternativo", "8081": "Web alternativo",
+    "8085": "Web alternativo", "8088": "Web alternativo", "8443": "HTTPS alternativo",
+    "8888": "Web alternativo", "9090": "Painel web", "9200": "Elasticsearch",
+    "11211": "Memcached", "27017": "MongoDB",
+}
+
+
+def journal_bloqueios():
+    saida = subprocess.run(
+        ["journalctl", "-k", "--since", "-7d", "--no-pager", "-o", "short-unix"],
+        capture_output=True, text=True, check=False,
+    ).stdout
+    eventos = []
+    for linha in saida.splitlines():
+        if "UFW BLOCK" not in linha:
+            continue
+        try:
+            ts = float(linha.split(" ", 1)[0])
+        except ValueError:
+            continue
+        src = re.search(r"SRC=(\S+)", linha)
+        dpt = re.search(r"DPT=(\d+)", linha)
+        proto = re.search(r"PROTO=(\S+)", linha)
+        ip = src.group(1) if src else "?"
+        try:
+            ip = str(ipaddress.ip_address(ip))   # IPv6 na forma curta (2a06:4880:c000::)
+        except ValueError:
+            pass
+        eventos.append((
+            ts,
+            ip,
+            dpt.group(1) if dpt else None,
+            proto.group(1) if proto else "?",
+        ))
+    return eventos
+
+
+def fail2ban():
+    try:
+        txt = subprocess.run(
+            ["fail2ban-client", "status", "sshd"], capture_output=True, text=True, timeout=10, check=False
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return 0, 0
+    agora = re.search(r"Currently banned:\s*(\d+)", txt)
+    total = re.search(r"Total banned:\s*(\d+)", txt)
+    return int(agora.group(1)) if agora else 0, int(total.group(1)) if total else 0
+
+
+def main():
+    agora = time.time()
+    eventos = journal_bloqueios()
+    hora = [e for e in eventos if e[0] > agora - 3600]
+    dia = [e for e in eventos if e[0] > agora - 86400]
+
+    # 24 barras de uma hora cada, terminando na hora atual (hora local)
+    inicio_hora_atual = agora - (time.localtime(agora).tm_min * 60 + time.localtime(agora).tm_sec)
+    por_hora = []
+    for k in range(23, -1, -1):
+        ini = inicio_hora_atual - k * 3600
+        n = sum(1 for e in eventos if ini <= e[0] < ini + 3600)
+        por_hora.append({"h": time.strftime("%H", time.localtime(ini)), "n": n})
+
+    # 7 barras de um dia cada (dia local)
+    contagem_dia = Counter(time.strftime("%Y-%m-%d", time.localtime(e[0])) for e in eventos)
+    por_dia = []
+    for k in range(6, -1, -1):
+        t = agora - k * 86400
+        chave = time.strftime("%Y-%m-%d", time.localtime(t))
+        por_dia.append({"dia": time.strftime("%d/%m", time.localtime(t)), "n": contagem_dia.get(chave, 0)})
+
+    portas = Counter((e[2], e[3]) for e in eventos if e[2])
+    ips = Counter(e[1] for e in eventos)
+    # "hoje" = desde a meia-noite (hora local da VPS)
+    lt = time.localtime(agora)
+    meia_noite = agora - (lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec)
+    hoje = [e for e in eventos if e[0] >= meia_noite]
+    portas_hoje = Counter((e[2], e[3]) for e in hoje if e[2])
+    ips_hoje = Counter(e[1] for e in hoje)
+    banidos, total_banidos = fail2ban()
+
+    def lista_portas(c):
+        return [{"porta": p, "proto": pr, "servico": SERVICOS.get(p, ""), "n": n} for (p, pr), n in c.most_common(10)]
+
+    def lista_ips(c):
+        return [{"ip": ip, "n": n} for ip, n in c.most_common(10)]
+
+    dados = {
+        "atualizado": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(agora)),
+        "atualizado_hora": time.strftime("%H:%M", time.localtime(agora)),
+        "log_desde": time.strftime("%d/%m %H:%M", time.localtime(eventos[0][0])) if eventos else "—",
+        "hora": len(hora),
+        "dia": len(dia),
+        "semana": len(eventos),
+        "ips_semana": len(ips),
+        "fail2ban_banidos": banidos,
+        "fail2ban_total": total_banidos,
+        "por_hora": por_hora,
+        "por_dia": por_dia,
+        "hoje": len(hoje),
+        "ips_hoje": len(ips_hoje),
+        "portas": lista_portas(portas),
+        "ips": lista_ips(ips),
+        "portas_hoje": lista_portas(portas_hoje),
+        "ips_lista_hoje": lista_ips(ips_hoje),
+    }
+
+    os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(SAIDA), prefix=".dados-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, SAIDA)
+
+
+if __name__ == "__main__":
+    main()
