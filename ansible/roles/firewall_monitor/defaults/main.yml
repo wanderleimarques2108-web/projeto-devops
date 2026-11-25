@@ -1,0 +1,10 @@
+---
+# Token do monitor Push criado no Uptime Kuma. Não vai para o Git:
+# coloque em host_vars/projeto-devops.yml (ignorado) ou passe com -e.
+kuma_push_token: ""
+
+# O Kuma escuta só em 127.0.0.1:3001 na própria VPS.
+kuma_push_base_url: "http://127.0.0.1:3001/api/push"
+
+# Acima deste número de pacotes bloqueados por minuto o monitor fica vermelho.
+firewall_monitor_limite: 300
