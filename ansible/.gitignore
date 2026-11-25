@@ -1,3 +1,4 @@
 inventory.ini
+host_vars/
 collections/
 *.retry
