@@ -178,9 +178,11 @@ Fluxo de trabalho: branch `feature/...` → Pull Request → merge na `main` →
 Ferramenta: **Uptime Kuma**, executada como container no mesmo `docker-compose.yml` da aplicação. O painel **não é público**: o container escuta só em `127.0.0.1:3001` e o acesso é feito por túnel SSH, com usuário e senha próprios.
 
 ```bash
-ssh -L 3001:127.0.0.1:3001 <usuario>@<IP-DA-VPS>
-# depois, no navegador: http://localhost:3001
+ssh -L 3001:127.0.0.1:3001 -L 3002:127.0.0.1:3002 <usuario>@<IP-DA-VPS>
+# depois, no navegador: http://localhost:3001 (Uptime Kuma) e http://localhost:3002 (painel de bloqueios)
 ```
+
+O **painel de bloqueios do firewall** (`http://localhost:3002`, também só em `127.0.0.1`) mostra os bloqueios da última hora, das últimas 24 horas e dos últimos 7 dias, os gráficos por hora e por dia, as portas mais atacadas (com o nome do serviço), os IPs que mais tentaram e quantos IPs o fail2ban está bloqueando. Atualiza a cada minuto. É instalado pela role `firewall_monitor` do Ansible.
 
 ### Monitores configurados
 
@@ -189,6 +191,7 @@ ssh -L 3001:127.0.0.1:3001 <usuario>@<IP-DA-VPS>
 | site - Aplicação | HTTP(s) | `https://www.pvhdevops.tech` | 60 s | A aplicação está online? (passa pelo Cloudflare e acompanha a validade do certificado HTTPS) |
 | Container - site (Nginx) | HTTP(s) | `http://site:80` | 60 s | O container está funcionando? (acesso pela rede interna do Docker, sem passar pelo Cloudflare) |
 | Servidor - VPS (SSH) | TCP Port | IP da VPS (informado ao professor), porta 22 | 60 s | O servidor está funcionando? |
+| Firewall - bloqueios (última hora) | Push | recebe da própria VPS, a cada minuto, quantas conexões o UFW bloqueou na última hora e as portas mais atacadas | 120 s | O servidor está sendo atacado? (vermelho acima de 300 pacotes bloqueados num minuto ou se o envio parar; detalhes em [`ansible/README.md`](ansible/README.md)) |
 
 ### Como identificar uma indisponibilidade
 
