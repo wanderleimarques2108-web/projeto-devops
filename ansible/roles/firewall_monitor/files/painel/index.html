@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#170a2b">
+<title>Bloqueios do firewall</title>
+<link rel="stylesheet" href="assets/css/fonts.css">
+<style>
+/* Tokens do Vesper Design System (mesmos valores do original) */
+:root {
+  --signal: #6cf3a3; --signal-deep: #4bd888;
+  --orb-mint: #52ffa5; --orb-violet: #582eff; --flame-cyan: #6bfdff;
+  --void: #170a2b; --chalk: #fdfdfd; --ink: #000;
+  --hairline: rgba(255,255,255,.1); --rule: rgba(255,255,255,.2); --stat-rule: rgba(255,255,255,.8);
+  --paper-rule: rgba(0,0,0,.15); --muted: rgba(255,255,255,.7);
+  --quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+body { --font-tag: var(--font-mulish), ui-sans-serif, system-ui, sans-serif;
+       --font-general: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #000; }
+body { min-height: 100vh; background: #000; color: var(--chalk); font-family: var(--font-general); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+.tag { font-family: var(--font-tag); text-transform: uppercase; }
+#fundo { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+/* cena 3D original do Vesper (Overview em modo "bg": só o canvas, camadas de texto escondidas) */
+#cena { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 0; pointer-events: none; background: #000;
+  opacity: 0; transition: opacity 1.6s cubic-bezier(0.22, 1, 0.36, 1); }
+#cena.pronta { opacity: 1; }
+.veu { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(130% 90% at 50% 10%, rgba(0,0,0,.05), rgba(0,0,0,.55) 75%); }
+
+/* Glass bar (header do Vesper) */
+header.barra { position: fixed; top: max(10px, .694vw); left: 50%; transform: translateX(-50%); z-index: 50;
+  width: min(95vw, 1120px); height: max(52px, 3.542vw); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 max(10px, .556vw) 0 max(14px, .833vw); border: 1px solid var(--hairline); background: rgba(0,0,0,.8);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.marca { display: flex; align-items: center; gap: 12px; font: 400 max(13px, 1.111vw)/1.2 var(--font-general); letter-spacing: .02em; }
+.marca img { width: max(18px, 1.25vw); height: max(18px, 1.25vw); filter: invert(1); animation: gira 9s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+.status { display: flex; align-items: center; gap: max(12px, 1.111vw); font: 400 max(11px, .833vw)/1.2 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.62); white-space: nowrap; }
+.aovivo { display: flex; align-items: center; gap: 8px; color: var(--signal); }
+.aovivo i { width: 7px; height: 7px; background: var(--signal); box-shadow: 0 0 10px var(--signal); animation: pulsa 2s var(--quint) infinite; }
+@keyframes pulsa { 50% { opacity: .25; } }
+
+main { position: relative; z-index: 2; width: min(95vw, 1120px); margin: 0 auto; padding: max(120px, 9vw) 0 6vw; }
+
+/* Hero: tag row + display title + parágrafo */
+.tags { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem max(14px, 1.667vw); font: 400 max(11px, .972vw)/1.2 var(--font-tag); text-transform: uppercase; }
+.tags .sep { width: max(3px, .208vw); height: max(3px, .208vw); background: #fff; flex-shrink: 0; }
+h1 { margin-top: max(22px, 2.222vw); font: 300 clamp(2.6rem, 6.2vw, 6.25rem)/.9 var(--font-general); }
+.lead { margin-top: max(18px, 1.667vw); max-width: 46ch; font: 400 max(12px, 1.042vw)/1.35 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.8); }
+
+/* Statistic (componente "Data display" do Vesper) */
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: max(16px, 1.667vw); margin-top: max(40px, 4.444vw); }
+.stat { display: flex; flex-direction: column; gap: max(8px, .833vw); border-left: 1px solid var(--stat-rule); padding-left: max(12px, 1.111vw); }
+.stat .v { font: 300 clamp(2rem, 3.4vw, 3.4rem)/1 var(--font-tag); font-variant-numeric: tabular-nums; }
+.stat .l { font: 400 max(11px, .903vw)/1.25 var(--font-tag); color: var(--muted); }
+.stat.destaque .v { color: var(--signal); }
+
+/* Cards de vidro (glass panel do Vesper) para hero, gráficos e listas */
+.palco { perspective: 1400px; margin-top: max(20px, 1.667vw); }
+.vidro h2 { font: 300 clamp(1.9rem, 3.6vw, 3.5rem)/.9 var(--font-general); }
+.indice { font: 400 max(11px, 1.111vw)/1.2 var(--font-general); margin-bottom: max(10px, .833vw); }
+.vidro.hero { background: rgba(0,0,0,.42); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); padding: max(28px, 3.333vw) max(22px, 2.778vw) max(30px, 3.056vw); }
+.vidro.hero .stats { margin-top: max(36px, 3.611vw); }
+.vidro.grafs { transform-origin: bottom; }
+.graf-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: max(22px, 2.083vw); }
+.graf-cab .nota { font: 400 max(11px, .833vw)/1.3 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.62); }
+.duas { display: grid; grid-template-columns: 1.6fr 1fr; gap: max(28px, 3.333vw); }
+/* barras no degradê da esfera do Vesper (violeta → ciano → menta), grade em hairline */
+.barras { position: relative; height: clamp(170px, 18vw, 260px); display: flex; align-items: flex-end; gap: 4px;
+  border-bottom: 1px solid var(--rule);
+  background-image: linear-gradient(to top, rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 100% 25%; background-position: 0 100%; }
+.barras .b { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
+.barras .b span { display: block; width: 100%; opacity: .78;
+  background: linear-gradient(to top, var(--orb-violet), var(--flame-cyan) 62%, var(--orb-mint));
+  transition: height .9s var(--quint), opacity .3s, box-shadow .3s; }
+.barras .b:hover span { opacity: 1; box-shadow: 0 0 18px rgba(107,253,255,.45); }
+.barras .b.atual span { opacity: 1; background: var(--signal); box-shadow: 0 0 16px rgba(108,243,163,.55); }
+.barras .b em { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translate(-50%, 4px); padding: 5px 8px;
+  background: rgba(0,0,0,.9); border: 1px solid var(--hairline); color: var(--chalk);
+  font: 500 12px/1 var(--font-general); font-style: normal; font-variant-numeric: tabular-nums; letter-spacing: .01em;
+  opacity: 0; transition: opacity .25s, transform .25s var(--quint); white-space: nowrap; pointer-events: none; z-index: 2; }
+.barras .b:hover em { opacity: 1; transform: translate(-50%, 0); }
+/* eixo: rótulo espaçado, com tracinho, algarismos tabulares */
+.eixo { display: flex; gap: 4px; margin-top: 0; font: 400 12px/1 var(--font-general); font-variant-numeric: tabular-nums;
+  letter-spacing: .02em; color: rgba(253,253,253,.5); }
+.eixo span { position: relative; flex: 1 1 0; min-width: 0; padding-top: 12px; text-align: center; white-space: nowrap; overflow: visible; }
+.eixo span:not(:empty)::before { content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 6px; background: rgba(255,255,255,.28); }
+.eixo span.agora { color: var(--signal); font-weight: 500; }
+.dias .barras { gap: 10px; }
+.dias .eixo { gap: 10px; }
+
+/* Período dos cards 03/04: botões ghost do Vesper (ativo = sólido chalk) */
+.periodo { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: max(40px, 3.889vw);
+  text-shadow: 0 0 2px rgba(0,0,0,.85), 0 1px 14px rgba(0,0,0,.9); }
+.periodo-txt { font: 400 max(12px, .972vw)/1.3 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.8); }
+.periodo-txt b { font-weight: 400; color: var(--signal); }
+.seg { display: flex; gap: 6px; }
+.seg button { height: max(38px, 2.778vw); padding: 0 max(16px, 1.25vw); border: 1px solid rgba(255,255,255,.5); background: rgba(255,255,255,0);
+  color: var(--chalk); font: 400 max(13px, .972vw)/1 var(--font-general); cursor: pointer; text-shadow: none;
+  transition: background-color .3s, color .3s, border-color .3s; }
+.seg button:hover { border-color: #fff; background: rgba(255,255,255,.12); }
+.seg button:active { background: rgba(255,255,255,.22); }
+.seg button[aria-pressed="true"] { background: var(--chalk); border-color: var(--chalk); color: #000; }
+.seg button:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.vidro .sub { margin-top: max(10px, .833vw); font: 400 max(11px, .833vw)/1.35 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.62); }
+.vidro .sub b { font-weight: 400; color: var(--chalk); }
+
+/* Listas em glass panel */
+.listas { display: grid; grid-template-columns: 1fr 1fr; gap: max(16px, 1.667vw); margin-top: max(14px, 1.111vw); }
+.vidro { border: 1px solid var(--hairline); background: rgba(0,0,0,.8); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); padding: max(20px, 2.222vw); }
+.vidro .indice { color: rgba(253,253,253,.62); }
+ol.linhas { list-style: none; margin-top: max(18px, 1.667vw); border-top: 1px solid var(--rule); }
+ol.linhas li { display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 0 .9rem; align-items: center; padding: max(10px, .833vw) .25rem; border-bottom: 1px solid var(--rule); position: relative; transition: background .3s; }
+ol.linhas li:hover { background: rgba(255,255,255,.04); }
+ol.linhas .pos { font: 400 max(11px, .833vw)/1 var(--font-tag); color: rgba(253,253,253,.4); }
+ol.linhas .nome { font: 400 max(13px, 1.042vw)/1.2 var(--font-general); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ol.linhas .nome small { margin-left: .6em; font: 400 max(10px, .764vw)/1 var(--font-tag); text-transform: uppercase; color: rgba(253,253,253,.5); }
+ol.linhas .n { font: 300 max(15px, 1.25vw)/1 var(--font-tag); font-variant-numeric: tabular-nums; }
+ol.linhas .trilho { grid-column: 2 / 4; height: 1px; margin-top: 8px; background: rgba(255,255,255,.08); }
+ol.linhas .trilho i { display: block; height: 1px; background: linear-gradient(90deg, var(--orb-mint), var(--flame-cyan), var(--orb-violet)); transition: width 1s var(--quint); }
+
+footer { position: relative; z-index: 2; width: min(95vw, 1120px); margin: 0 auto; padding: max(24px, 2.222vw) 0 max(40px, 3vw); border-top: 1px solid rgba(255,255,255,.15);
+  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font: 400 max(11px, .833vw)/1.4 var(--font-tag); text-transform: uppercase; color: rgba(255,255,255,.55); }
+
+/* Loader do Vesper (cover com star-fall, contador e barra) */
+#loader { position: fixed; inset: 0; z-index: 60; overflow: hidden; background: #000; font: 400 max(12px, 1.111vw)/1.2 var(--font-tag); text-transform: uppercase; color: var(--chalk); }
+#loader canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#loader .topo { position: absolute; top: 0; left: 0; display: flex; gap: 1.25em; padding: max(18px, 1.667vw) max(18px, 2.222vw); }
+#loader .topo span + span { color: rgba(253,253,253,.35); }
+#loader .base { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(18px, 2.222vw) max(18px, 1.667vw); }
+#loader .linha { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: max(10px, .833vw); }
+#loader .linha > span:first-child { font-size: max(11px, .972vw); color: rgba(253,253,253,.4); }
+#loader .cont { font: 400 max(13px, 1.111vw)/1 var(--font-general); font-variant-numeric: tabular-nums; color: rgba(253,253,253,.8); }
+#loader .cont b { font-weight: 400; color: rgba(253,253,253,.35); }
+#loader .trilha { position: relative; height: 1px; background: rgba(253,253,253,.12); overflow: hidden; }
+#loader .trilha span { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--chalk); transition: width .22s cubic-bezier(0.33, 1, 0.68, 1); }
+
+/* halo escuro do Vesper: o texto continua legível sobre a parte mais clara da cena */
+.tags, h1, .lead, .stat, .status, footer { text-shadow: 0 0 2px rgba(0,0,0,.85), 0 1px 14px rgba(0,0,0,.9); }
+.stat .l { color: rgba(255,255,255,.82); }
+.erro { margin-top: 1rem; color: #ffb4b4; font: 400 12px/1.4 var(--font-tag); text-transform: uppercase; }
+[data-esconde] { opacity: 0; }
+
+@media (max-width: 1023.98px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .duas, .listas { grid-template-columns: 1fr; }
+  .status .so-largo { display: none; }
+}
+.duas > div, .listas > div { min-width: 0; }
+@media (max-width: 560px) {
+  header.barra { width: calc(100% - 2rem); }
+  main, footer { width: calc(100% - 2rem); }
+  .vidro, .vidro.hero { padding: 1.25rem; }
+  .barras { gap: 2px; }
+  .eixo { gap: 2px; }
+  .eixo { font-size: 11px; }
+  .dias .barras, .dias .eixo { gap: 6px; }
+  .stats { grid-template-columns: 1fr; }
+  .stat { flex-direction: row; align-items: baseline; gap: .6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marca img, .aovivo i { animation: none; }
+}
+</style>
+</head>
+<body class="onest_variable generalSans_variable mulish_variable">
+
+<canvas id="fundo" aria-hidden="true"></canvas>
+<iframe id="cena" src="fundo/index.html" title="Cena animada de fundo" aria-hidden="true" tabindex="-1"></iframe>
+<div class="veu" aria-hidden="true"></div>
+
+<div id="loader" role="status" aria-live="polite" aria-label="Carregando dados do firewall">
+  <canvas aria-hidden="true"></canvas>
+  <div class="topo"><span>PVHDEVOPS</span><span>FIREWALL / UFW</span></div>
+  <div class="base">
+    <div class="linha"><span>LENDO OS BLOQUEIOS DA VPS</span><span class="cont"><span id="pct">000</span><b>%</b></span></div>
+    <div class="trilha"><span id="barra"></span></div>
+  </div>
+</div>
+
+<header class="barra">
+  <div class="marca"><img src="assets/images/asterisk.svg" alt="">pvhdevops · firewall</div>
+  <div class="status">
+    <span class="so-largo" id="atualizado">[ ATUALIZADO —:— ]</span>
+    <span class="aovivo"><i></i>Ao vivo</span>
+  </div>
+</header>
+
+<main>
+  <section class="vidro hero">
+    <div class="tags" data-unit-reveal><span>[ PROJETO DEVOPS ]</span><span class="sep"></span><span>[ VPS UBUNTU 24.04 ]</span><span class="sep"></span><span>[ UFW + FAIL2BAN ]</span></div>
+    <h1 data-te="letter">Bloqueios do firewall</h1>
+    <p class="lead" data-te="word">Tudo o que tentou entrar na VPS e foi barrado: robôs varrendo portas fechadas, tentativas no SSH e IPs bloqueados pelo fail2ban.</p>
+
+    <div class="stats" data-unit-reveal>
+      <div class="stat destaque"><span class="v" data-n="hora">0</span><span class="l">Bloqueios na última hora</span></div>
+      <div class="stat"><span class="v" data-n="dia">0</span><span class="l">Últimas 24 horas</span></div>
+      <div class="stat"><span class="v" data-n="semana">0</span><span class="l">Últimos 7 dias</span></div>
+      <div class="stat"><span class="v" data-n="ips">0</span><span class="l">IPs diferentes (7 dias)</span></div>
+      <div class="stat"><span class="v" data-n="banidos">0</span><span class="l">Banidos agora pelo fail2ban</span></div>
+    </div>
+  </section>
+
+  <section class="palco">
+    <div class="vidro grafs" data-card-reveal>
+      <div class="duas">
+        <div>
+          <div class="indice">[ 01 ]</div>
+          <div class="graf-cab"><h2>Por hora</h2><span class="nota">Últimas 24 horas · passe o mouse</span></div>
+          <div class="barras" id="graf-hora"></div>
+          <div class="eixo" id="eixo-hora"></div>
+        </div>
+        <div class="dias">
+          <div class="indice">[ 02 ]</div>
+          <div class="graf-cab"><h2>Por dia</h2><span class="nota">Últimos 7 dias</span></div>
+          <div class="barras" id="graf-dia"></div>
+          <div class="eixo" id="eixo-dia"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="periodo">
+    <p class="periodo-txt">Tentativas <b>bloqueadas</b> pelo firewall: nenhuma conseguiu entrar.</p>
+    <div class="seg" role="group" aria-label="Período dos cards 03 e 04">
+      <button type="button" data-per="hoje" aria-pressed="true">Hoje</button>
+      <button type="button" data-per="semana" aria-pressed="false">7 dias</button>
+    </div>
+  </div>
+  <section class="listas">
+    <div class="vidro" data-card-reveal>
+      <div class="indice">[ 03 ]</div>
+      <h2>Portas mais atacadas</h2>
+      <p class="sub" data-sub></p>
+      <ol class="linhas" id="lista-portas"></ol>
+    </div>
+    <div class="vidro" data-card-reveal>
+      <div class="indice">[ 04 ]</div>
+      <h2>IPs que mais tentaram</h2>
+      <p class="sub" data-sub></p>
+      <ol class="linhas" id="lista-ips"></ol>
+    </div>
+  </section>
+  <p class="erro" id="erro" hidden></p>
+</main>
+
+<footer>
+  <span>Fonte: log do kernel (UFW BLOCK) e fail2ban · atualiza a cada minuto</span>
+  <span id="desde">—</span>
+</footer>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var calmo = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fmt = function (n) { return Number(n || 0).toLocaleString('pt-BR'); };
+
+  /* ---------- Vesper: TextEngine layout (split em .line-word) ---------- */
+  function split(el, unit) {
+    var words = el.textContent.trim().split(/\s+/);
+    el.setAttribute('aria-label', el.textContent.trim());
+    el.textContent = '';
+    el.style.columnGap = '0.25em'; el.style.display = 'flex'; el.style.flexWrap = 'wrap';
+    words.forEach(function (w) {
+      var lw = document.createElement('span');
+      lw.className = 'line-word'; lw.style.display = 'inline-block'; lw.setAttribute('aria-hidden', 'true');
+      (unit === 'letter' ? w.split('') : [w]).forEach(function (c) {
+        var s = document.createElement('span'); s.style.display = 'inline-block'; s.textContent = c; lw.appendChild(s);
+      });
+      el.appendChild(lw);
+    });
+  }
+
+  /* ---------- Vesper: reveal.ts presets (mesmos valores) ---------- */
+  var QUINT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  var REVEAL = {
+    letter: { from: { opacity: '0', filter: 'blur(12px)', transform: 'none' }, dur: 1000, stagger: 26 },
+    word: { from: { opacity: '0', filter: 'blur(8px)', transform: 'translate3d(0,16px,0)' }, dur: 1200, stagger: 42 },
+    unit: { from: { opacity: '0', filter: 'blur(10px)', transform: 'translate3d(0,20px,0)' }, dur: 1000, stagger: 0 },
+    card: { from: { opacity: '0', filter: 'blur(14px)', transform: 'scale(0.94) rotateX(12deg)' }, dur: 1200, stagger: 0 }
+  };
+  var TO = { opacity: '1', filter: 'blur(0px)', transform: 'none' };
+  function prepara(units, kind) {
+    var r = REVEAL[kind];
+    units.forEach(function (u) { u.style.transition = 'none'; for (var p in r.from) u.style[p] = r.from[p]; });
+  }
+  function toca(units, kind, atraso) {
+    var r = REVEAL[kind];
+    var props = Object.keys(r.from).map(function (p) { return p.replace(/[A-Z]/g, function (m) { return '-' + m.toLowerCase(); }); });
+    void document.body.offsetWidth;
+    units.forEach(function (u, i) {
+      u.style.transition = props.map(function (p) { return p + ' ' + r.dur + 'ms ' + QUINT + ' ' + ((atraso || 0) + i * r.stagger) + 'ms'; }).join(', ');
+      for (var p in r.from) u.style[p] = TO[p];
+    });
+  }
+
+  var grupos = [];
+  $$('[data-te]').forEach(function (el) { split(el, el.dataset.te); grupos.push({ units: $$('.line-word > span', el), kind: el.dataset.te }); });
+  $$('[data-unit-reveal]').forEach(function (el) { grupos.push({ units: Array.prototype.slice.call(el.children), kind: 'unit', passo: 70 }); });
+  $$('[data-card-reveal]').forEach(function (el) { grupos.push({ units: [el], kind: 'card', rolagem: true }); });
+  if (!calmo) grupos.forEach(function (g) { prepara(g.units, g.kind); });
+
+  function revelaTudo() {
+    if (calmo) return;
+    var t = 0;
+    grupos.forEach(function (g) {
+      if (g.rolagem) return;
+      if (g.passo) g.units.forEach(function (u, i) { toca([u], 'unit', t + i * g.passo); });
+      else toca(g.units, g.kind, t);
+      t += 180;
+    });
+    var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { toca([e.target], 'card', 0); io.unobserve(e.target); } });
+    }, { threshold: 0.15 }) : null;
+    grupos.forEach(function (g) { if (g.rolagem) { if (io) io.observe(g.units[0]); else toca(g.units, 'card', 0); } });
+  }
+
+  /* ---------- Vesper: star-fall.tsx (loop de desenho original) ---------- */
+  var ANGLE = -0.32, STAR_COUNT = 140;
+  var GRAD = [[82, 255, 165], [107, 253, 255], [88, 46, 255]];   /* #52ffa5 → #6bfdff → #582eff */
+  function sampleOrb(t) {
+    var scaled = Math.min(Math.max(t, 0), 1) * (GRAD.length - 1), i = Math.min(Math.floor(scaled), GRAD.length - 2), f = scaled - i;
+    var a = GRAD[i], b = GRAD[i + 1];
+    return [Math.round(a[0] + (b[0] - a[0]) * f), Math.round(a[1] + (b[1] - a[1]) * f), Math.round(a[2] + (b[2] - a[2]) * f)];
+  }
+  function StarFall(canvas, intensity) {
+    var ctx = canvas.getContext('2d'), width = 0, height = 0, dpr = 1, last = performance.now();
+    var dx = Math.sin(ANGLE), dy = Math.cos(ANGLE);
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = canvas.clientWidth; height = canvas.clientHeight;
+      canvas.width = Math.floor(width * dpr); canvas.height = Math.floor(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function spawn(star, initial) {
+      star.z = Math.random(); star.seed = Math.random();
+      var c = sampleOrb(star.seed); star.r = c[0]; star.g = c[1]; star.b = c[2];
+      star.x = Math.random() * (width + height * Math.abs(dx)) - height * Math.abs(dx) * 0.5;
+      star.y = initial ? Math.random() * height : -Math.random() * height * 0.4 - 40;
+    }
+    resize();
+    var stars = []; for (var n = 0; n < STAR_COUNT; n++) { var s0 = {}; spawn(s0, true); stars.push(s0); }
+    return function frame() {
+      if (canvas.clientWidth !== width || canvas.clientHeight !== height) resize();
+      var now = performance.now(), delta = Math.min((now - last) / 1e3, 0.05); last = now;
+      var boost = intensity();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(0, 0, 0, ' + (0.34 - Math.min(boost, 2) * 0.1) + ')';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalCompositeOperation = 'lighter';
+      for (var i = 0; i < stars.length; i++) {
+        var star = stars[i], depth = 0.25 + star.z * 0.75, speed = (140 + depth * 620) * (0.55 + boost * 1.35), step = speed * delta;
+        var px = star.x, py = star.y; star.x += dx * step; star.y += dy * step;
+        var length = step * (1.1 + boost * 1.6), tailX = px - dx * length, tailY = py - dy * length;
+        var alpha = (0.1 + depth * 0.5) * Math.min(1, 0.35 + boost);
+        var hr = Math.round(star.r + (255 - star.r) * 0.3), hg = Math.round(star.g + (255 - star.g) * 0.3), hb = Math.round(star.b + (255 - star.b) * 0.3);
+        var grad = ctx.createLinearGradient(tailX, tailY, star.x, star.y);
+        grad.addColorStop(0, 'rgba(' + star.r + ',' + star.g + ',' + star.b + ',0)');
+        grad.addColorStop(1, 'rgba(' + hr + ',' + hg + ',' + hb + ',' + alpha.toFixed(3) + ')');
+        ctx.strokeStyle = grad; ctx.lineWidth = 0.5 + depth * 1.4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(star.x, star.y); ctx.stroke();
+        if (star.y - length > height || star.x < -height || star.x > width + height) spawn(star, false);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    };
+  }
+
+  /* fundo reserva: a chuva de estrelas em intensidade baixa, até a cena 3D ficar pronta (ou se ela não abrir) */
+  var nivelFundo = 0.12, alvoFundo = 0.12;
+  var desenhaFundo = StarFall($('#fundo'), function () { return nivelFundo; });
+
+  /* ---------- cena 3D do Vesper: a Overview original em modo "bg" (mesma mensagem do design system) ---------- */
+  var cena = $('#cena'), cenaPronta = false, estacao = 0, ESTACOES = [0, 1, 2], iEst = 0, voltaEst = null;
+  function estacionar(n) { estacao = n; try { cena.contentWindow.postMessage({ ds: 'bg', station: n }, '*'); } catch (e) {} }
+  cena.addEventListener('load', function () { estacionar(ESTACOES[iEst]); });
+  addEventListener('message', function (e) {
+    if (e.source !== cena.contentWindow || !e.data || e.data.ds !== 'ready') return;
+    cenaPronta = true; estacionar(ESTACOES[iEst]); cena.classList.add('pronta');
+  });
+  /* passeia entre esfera → galáxia → cérebro, como a rolagem da página original */
+  if (!calmo) setInterval(function () {
+    if (!cenaPronta || voltaEst) return;
+    iEst = (iEst + 1) % ESTACOES.length; estacionar(ESTACOES[iEst]);
+  }, 30000);
+  function explode() {                           /* bloqueios novos: o cérebro explode (estação 3) e volta */
+    if (!cenaPronta || calmo) return;
+    clearTimeout(voltaEst); estacionar(3);
+    voltaEst = setTimeout(function () { voltaEst = null; estacionar(ESTACOES[iEst]); }, 6000);
+  }
+
+  /* ---------- Vesper: loader.tsx (≥900ms contando, 260ms parado em 100%, saída 900ms com intensidade → 3.6) ---------- */
+  var EXIT = function (t) { /* cubicBezier(.6,.05,.2,1) */
+    var lo = 0, hi = 1, x = t, ax = function (u, a, b) { var v = 1 - u; return 3 * v * v * u * a + 3 * v * u * u * b + u * u * u; };
+    for (var i = 0; i < 20; i++) { if (ax(x, .6, .2) < t) lo = x; else hi = x; x = (lo + hi) / 2; }
+    return ax(x, .05, 1);
+  };
+  var loader = $('#loader'), pctEl = $('#pct'), barraEl = $('#barra');
+  var nivelLoader = 0, desenhaLoader = StarFall($('canvas', loader), function () { return nivelLoader; });
+  var t0 = performance.now(), dadosProntos = false, fimContagem = null, saindo = null, loaderVivo = !calmo;
+  if (calmo) { loader.remove(); }
+
+  function quadroLoader(now) {
+    var t = now - t0, pct;
+    if (saindo === null) {
+      var alvo = dadosProntos && (cenaPronta || t > 8000) ? 100 : 92;
+      pct = Math.min(alvo, Math.floor(t / 900 * 100));
+      nivelLoader = pct / 100;
+      if (pct >= 100 && fimContagem === null) fimContagem = now;
+      if (fimContagem !== null && now - fimContagem >= 260) { saindo = now; revelaTudo(); }
+    } else {
+      pct = 100;
+      var e = Math.min(1, (now - saindo) / 900), fade = EXIT(e);
+      nivelLoader = 1 + 2.6 * e;
+      loader.style.opacity = String(1 - fade); loader.style.transform = 'scale(' + (1 + 0.06 * fade) + ')';
+      if (e >= 1) { loader.remove(); loaderVivo = false; return; }
+    }
+    pctEl.textContent = String(pct).padStart(3, '0');
+    barraEl.style.width = pct + '%';
+    desenhaLoader();
+  }
+
+  (function tick(now) {
+    now = now || performance.now();
+    nivelFundo += (alvoFundo - nivelFundo) * 0.04;
+    if (!calmo && !cenaPronta) desenhaFundo();
+    if (loaderVivo) quadroLoader(now);
+    requestAnimationFrame(tick);
+  })();
+
+  /* ---------- dados ---------- */
+  function conta(el, para) {
+    var de = Number(el.dataset.atual || 0); el.dataset.atual = para;
+    if (calmo || de === para) { el.textContent = fmt(para); return; }
+    var ini = performance.now(), dur = 1200;
+    (function passo(now) {
+      var k = Math.min(1, (now - ini) / dur), q = 1 - Math.pow(1 - k, 5);   /* easeOutQuint */
+      el.textContent = fmt(Math.round(de + (para - de) * q));
+      if (k < 1) requestAnimationFrame(passo);
+    })(ini);
+  }
+
+  function barras(alvo, eixo, itens, rotulo, atualUltima, mostraRotulo) {
+    var max = Math.max.apply(null, itens.map(function (i) { return i.n; }).concat([1]));
+    if (alvo.children.length !== itens.length) {
+      alvo.innerHTML = itens.map(function () { return '<div class="b"><span style="height:0"></span><em></em></div>'; }).join('');
+      eixo.innerHTML = itens.map(function () { return '<span></span>'; }).join('');
+    }
+    itens.forEach(function (it, i) {
+      var b = alvo.children[i];
+      b.classList.toggle('atual', !!atualUltima && i === itens.length - 1);
+      b.querySelector('span').style.height = (it.n / max * 100) + '%';
+      b.querySelector('em').textContent = fmt(it.n);
+      b.title = rotulo(it) + ': ' + fmt(it.n) + ' bloqueios';
+      var ultima = !!atualUltima && i === itens.length - 1;
+      var vizinhaDaAtual = !!atualUltima && !!mostraRotulo && i === itens.length - 2;
+      eixo.children[i].textContent = (!mostraRotulo || (mostraRotulo(it) && !vizinhaDaAtual) || ultima) ? rotulo(it) : '';
+      eixo.children[i].classList.toggle('agora', ultima);
+    });
+  }
+
+  function lista(alvo, itens, nome, sub) {
+    var max = itens.length ? itens[0].n : 1;
+    alvo.innerHTML = itens.map(function (it, i) {
+      return '<li><span class="pos">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '<span class="nome">' + nome(it) + (sub(it) ? '<small>' + sub(it) + '</small>' : '') + '</span>' +
+        '<span class="n">' + fmt(it.n) + '</span><span class="trilho"><i style="width:0"></i></span></li>';
+    }).join('') || '<li><span class="pos">—</span><span class="nome">Nenhum bloqueio no período</span><span></span></li>';
+    requestAnimationFrame(function () {
+      $$('.trilho i', alvo).forEach(function (el, i) { el.style.width = (itens[i].n / max * 100) + '%'; });
+    });
+  }
+
+  /* cards 03/04: período Hoje (desde 00:00) ou 7 dias; a escolha fica salva neste navegador */
+  var dados = null, periodo = 'hoje';
+  try { periodo = localStorage.getItem('painel-periodo') || 'hoje'; } catch (e) {}
+  function desenhaListas() {
+    if (!dados) return;
+    var hoje = periodo === 'hoje';
+    var portas = hoje ? (dados.portas_hoje || []) : dados.portas;
+    var ips = hoje ? (dados.ips_lista_hoje || []) : dados.ips;
+    var total = hoje ? dados.hoje : dados.semana;
+    var nips = hoje ? dados.ips_hoje : dados.ips_semana;
+    var quando = hoje ? 'Hoje, desde 00:00' : 'Últimos 7 dias';
+    $$('[data-sub]')[0].innerHTML = quando + ' · <b>' + fmt(total) + '</b> tentativas bloqueadas';
+    $$('[data-sub]')[1].innerHTML = quando + ' · <b>' + fmt(nips) + '</b> IPs diferentes';
+    lista($('#lista-portas'), portas, function (it) { return esc(it.porta) + '/' + esc(it.proto); }, function (it) { return esc(it.servico || ''); });
+    lista($('#lista-ips'), ips, function (it) { return esc(it.ip); }, function () { return ''; });
+    $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.per === periodo)); });
+  }
+  $$('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      periodo = b.dataset.per;
+      try { localStorage.setItem('painel-periodo', periodo); } catch (e) {}
+      desenhaListas();
+    });
+  });
+
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var ultimo = null;
+
+  function aplica(d) {
+    conta($('[data-n="hora"]'), d.hora);
+    conta($('[data-n="dia"]'), d.dia);
+    conta($('[data-n="semana"]'), d.semana);
+    conta($('[data-n="ips"]'), d.ips_semana);
+    conta($('[data-n="banidos"]'), d.fail2ban_banidos);
+    /* uma hora a cada 3 (00h, 03h, 06h…) + a hora atual; os outros valores aparecem ao passar o mouse */
+    barras($('#graf-hora'), $('#eixo-hora'), d.por_hora, function (it) { return it.h + 'h'; }, true,
+      function (it) { return Number(it.h) % 3 === 0; });
+    barras($('#graf-dia'), $('#eixo-dia'), d.por_dia, function (it) { return it.dia; }, true);
+    dados = d; desenhaListas();
+    $('#atualizado').textContent = '[ ATUALIZADO ' + d.atualizado_hora + ' ]';
+    $('#desde').textContent = 'Log disponível desde ' + d.log_desde;
+    if (ultimo !== null && d.hora > ultimo) { alvoFundo = 0.9; explode(); }   /* bloqueios novos: a cena reage */
+    setTimeout(function () { alvoFundo = 0.12; }, 1800);
+    ultimo = d.hora;
+  }
+
+  function carrega() {
+    fetch('dados.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { $('#erro').hidden = true; aplica(d); dadosProntos = true; })
+      .catch(function (e) { $('#erro').hidden = false; $('#erro').textContent = 'Não consegui ler os dados (' + e.message + '). Tento de novo em 1 minuto.'; dadosProntos = true; });
+  }
+  carrega();
+  setInterval(carrega, 60000);
+  if (calmo) revelaTudo();
+})();
+</script>
+</body>
+</html>
