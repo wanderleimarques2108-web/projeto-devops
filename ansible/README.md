@@ -13,7 +13,7 @@ Provisiona a VPS do zero e publica a aplicação com o `docker-compose.yml` da r
 
 ```bash
 pipx install ansible-core     # ou: sudo apt install ansible
-cd infra
+cd ansible
 ansible-galaxy collection install -r requirements.yml
 ```
 

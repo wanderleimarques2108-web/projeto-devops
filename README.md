@@ -84,7 +84,7 @@ Cadeia Docker: **Código → Dockerfile → Imagem → Container → Aplicação
 projeto-devops/
 ├── .github/workflows/docker.yml   # pipeline CI/CD
 ├── docs/evidencias/               # prints das evidências
-├── infra/                         # Ansible: provisionamento da VPS e deploy
+├── ansible/                       # Ansible: provisionamento da VPS e deploy
 ├── site/                          # aplicação (HTML, CSS, favicon)
 │   ├── index.html
 │   ├── styles.css
@@ -314,13 +314,13 @@ docker image prune -f
 **Com Ansible (da sua máquina):**
 
 ```bash
-cd infra
+cd ansible
 ansible-playbook playbook.yml --tags app
 ```
 
 ### Provisionamento com Ansible
 
-A pasta `infra/` tem um playbook Ansible que prepara a VPS do zero: instala pacotes básicos, instala o Docker e o Compose pelo repositório oficial, configura o UFW (só 22 e 80) e sobe a aplicação com o `docker-compose.yml`. O inventário com IP e usuário fica fora do Git (`inventory.ini`). Instruções em [`infra/README.md`](infra/README.md).
+A pasta `ansible/` tem um playbook Ansible que prepara a VPS do zero: instala pacotes básicos, instala o Docker e o Compose pelo repositório oficial, configura o UFW (só 22 e 80) e sobe a aplicação com o `docker-compose.yml`. O inventário com IP e usuário fica fora do Git (`inventory.ini`). Instruções em [`ansible/README.md`](ansible/README.md).
 
 ## 13. Procedimentos básicos de recuperação
 
@@ -331,7 +331,7 @@ A pasta `infra/` tem um playbook Ansible que prepara a VPS do zero: instala paco
 | Deploy ruim | Reverter o commit na `main` (`git revert`) e a pipeline publica a versão anterior; ou usar uma tag antiga da imagem (`:v<N>`) |
 | VPS reiniciou | O Docker inicia no boot e os containers voltam sozinhos |
 | Erro 52x do Cloudflare | A VPS não respondeu: conferir `docker compose ps`, o firewall (porta 80) e se a VPS está ligada |
-| VPS perdida | Criar nova VPS, atualizar o IP em `infra/inventory.ini` e rodar `ansible-playbook playbook.yml` (Docker, firewall e aplicação); depois atualizar o IP no Cloudflare e nos secrets da pipeline |
+| VPS perdida | Criar nova VPS, atualizar o IP em `ansible/inventory.ini` e rodar `ansible-playbook playbook.yml` (Docker, firewall e aplicação); depois atualizar o IP no Cloudflare e nos secrets da pipeline |
 | Dados do monitor | Volume `kuma_data`; backup: `docker run --rm -v projeto-devops_kuma_data:/d -v $PWD:/b alpine tar czf /b/kuma.tgz -C /d .` |
 
 ## 14. Evidências
